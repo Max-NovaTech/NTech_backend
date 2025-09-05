@@ -57,9 +57,38 @@ exports.getAllOrders = async (req, res) => {
 
 exports.getOrderStatus = async (req, res) => {
   try {
-    const orders = await getOrderStatus();
-    res.json(orders);
+    const {
+      page = 1,
+      limit = 50,
+      orderIdFilter,
+      phoneNumberFilter,
+      selectedProduct,
+      selectedStatusMain,
+      selectedDate,
+      startTime,
+      endTime,
+      sortOrder = 'newest',
+      showNewRequestsOnly = false
+    } = req.query;
+
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      orderIdFilter,
+      phoneNumberFilter,
+      selectedProduct,
+      selectedStatusMain,
+      selectedDate,
+      startTime,
+      endTime,
+      sortOrder,
+      showNewRequestsOnly: showNewRequestsOnly === 'true'
+    };
+
+    const result = await getOrderStatus(options);
+    res.json(result);
   } catch (error) {
+    console.error('Error in getOrderStatus:', error);
     res.status(500).json({ error: error.message });
   }
 };

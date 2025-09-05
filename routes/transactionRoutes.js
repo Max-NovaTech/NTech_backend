@@ -3,7 +3,8 @@ const router = express.Router();
 const { 
   getUserTransactionHistory, 
   getAllTransactionHistory, 
-  getUserBalanceSummary 
+  getUserBalanceSummary,
+  getTransactionStats
 } = require('../controllers/transactionController');
 // const { authenticate } = require('../middleware/authMiddleware');
 // const { isAdmin, isOwnerOrAdmin } = require('../middleware/accessControlMiddleware');
@@ -30,6 +31,14 @@ router.get('/transactions',
 //   authenticate, 
 //   isAdmin, 
   getAllTransactionHistory
+);
+
+// Route to get transaction statistics
+// Admin only access
+router.get('/transactions/stats', 
+//   authenticate, 
+//   isAdmin, 
+  getTransactionStats
 );
 
 // Audit Log for Admin Dashboard

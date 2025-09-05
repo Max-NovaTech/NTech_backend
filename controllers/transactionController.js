@@ -1,4 +1,4 @@
-const { getUserTransactions, getAllTransactions } = require('../services/transactionService');
+const { getUserTransactions, getAllTransactions, getTransactionStatistics } = require('../services/transactionService');
 
 // Get transactions for a specific user (accessible by user and admin)
 const getUserTransactionHistory = async (req, res) => {
@@ -24,13 +24,31 @@ const getUserTransactionHistory = async (req, res) => {
 // Get all transactions (admin only)
 const getAllTransactionHistory = async (req, res) => {
   try {
-    const { startDate, endDate, type } = req.query;
+    const { 
+      startDate, 
+      endDate, 
+      type, 
+      page = 1, 
+      limit = 100, 
+      search, 
+      amountFilter 
+    } = req.query;
     
-    const transactions = await getAllTransactions(startDate, endDate, type);
+    const result = await getAllTransactions(
+      startDate, 
+      endDate, 
+      type, 
+      null, // userId
+      parseInt(page), 
+      parseInt(limit), 
+      search, 
+      amountFilter
+    );
     
     res.status(200).json({
       success: true,
-      data: transactions
+      data: result.data,
+      pagination: result.pagination
     });
   } catch (error) {
     console.error("Error in getAllTransactionHistory:", error);
@@ -102,9 +120,43 @@ const getAuditLog = async (req, res) => {
   }
 };
 
+// Get transaction statistics (admin only)
+const getTransactionStats = async (req, res) => {
+  try {
+    const { 
+      startDate, 
+      endDate, 
+      type, 
+      search, 
+      amountFilter 
+    } = req.query;
+    
+    const stats = await getTransactionStatistics(
+      startDate, 
+      endDate, 
+      type, 
+      null, // userId
+      search, 
+      amountFilter
+    );
+    
+    res.status(200).json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error("Error in getTransactionStats:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || "Failed to retrieve transaction statistics" 
+    });
+  }
+};
+
 module.exports = {
   getUserTransactionHistory,
   getAllTransactionHistory,
   getUserBalanceSummary,
-  getAuditLog
+  getAuditLog,
+  getTransactionStats
 };

@@ -188,19 +188,161 @@ const processOrderItem = async (orderItemId, status) => {
 
 // ... (rest of the code remains the same)
 
-const getOrderStatus = async () => {
-  return await prisma.order.findMany({
+const getOrderStatus = async (options = {}) => {
+  const {
+    page = 1,
+    limit = 50,
+    orderIdFilter,
+    phoneNumberFilter,
+    selectedProduct,
+    selectedStatusMain,
+    selectedDate,
+    startTime,
+    endTime,
+    sortOrder = 'newest',
+    showNewRequestsOnly = false
+  } = options;
+
+  // Build where clause for filtering
+  const where = {};
+  const itemsWhere = {};
+
+  // Date filtering
+  if (selectedDate) {
+    const startDate = new Date(selectedDate);
+    const endDate = new Date(selectedDate);
+    endDate.setDate(endDate.getDate() + 1);
+    
+    if (startTime && endTime) {
+      const startDateTime = new Date(`${selectedDate}T${startTime}`);
+      const endDateTime = new Date(`${selectedDate}T${endTime}`);
+      where.createdAt = {
+        gte: startDateTime,
+        lte: endDateTime
+      };
+    } else {
+      where.createdAt = {
+        gte: startDate,
+        lt: endDate
+      };
+    }
+  }
+
+  // New requests filter (last 5 minutes)
+  if (showNewRequestsOnly) {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    where.createdAt = {
+      gte: fiveMinutesAgo
+    };
+  }
+
+  // Phone number filter - search both order-level and item-level mobile numbers
+  if (phoneNumberFilter) {
+    where.OR = [
+      {
+        mobileNumber: {
+          contains: phoneNumberFilter
+        }
+      },
+      {
+        items: {
+          some: {
+            mobileNumber: {
+              contains: phoneNumberFilter
+            }
+          }
+        }
+      }
+    ];
+  }
+
+  // Order ID filter
+  if (orderIdFilter) {
+    where.id = parseInt(orderIdFilter) || undefined;
+  }
+
+  // Product filter
+  if (selectedProduct) {
+    itemsWhere.product = {
+      name: selectedProduct
+    };
+  }
+
+  // Status filter
+  if (selectedStatusMain) {
+    itemsWhere.status = selectedStatusMain;
+  }
+
+  // Add items filter to where clause if needed
+  if (Object.keys(itemsWhere).length > 0) {
+    where.items = {
+      some: itemsWhere
+    };
+  }
+
+  // Calculate pagination
+  const skip = (page - 1) * limit;
+  
+  // Get total count for pagination
+  const totalCount = await prisma.order.count({ where });
+  
+  // Determine sort order
+  const orderBy = sortOrder === 'newest' 
+    ? { createdAt: 'desc' }
+    : { createdAt: 'asc' };
+
+  // Fetch orders with optimized query
+  const orders = await prisma.order.findMany({
+    where,
+    skip,
+    take: limit,
+    orderBy,
     include: {
       items: {
         include: {
-          product: true
+          product: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true
+            }
+          }
         }
       },
       user: {
-        select: { id: true, name: true, email: true }
+        select: { id: true, name: true, email: true, phone: true }
       }
     }
   });
+
+  // Transform data to match frontend expectations
+  const transformedData = orders.flatMap(order => 
+    order.items.map(item => ({
+      ...item,
+      orderId: order.id,
+      createdAt: order.createdAt,
+      user: order.user,
+      // Use item-level mobile number first, then fall back to order-level
+      mobileNumber: item.mobileNumber || order.mobileNumber,
+      order: {
+        ...order,
+        items: [item] // Only include current item to avoid status mix-ups
+      },
+      isNew: new Date(order.createdAt) > new Date(Date.now() - 5 * 60 * 1000)
+    }))
+  );
+
+  return {
+    data: transformedData,
+    pagination: {
+      total: totalCount,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(totalCount / limit),
+      hasMore: (page * limit) < totalCount
+    }
+  };
 };
 
 const getOrderHistory = async (userId) => {
