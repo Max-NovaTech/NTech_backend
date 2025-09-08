@@ -4,7 +4,8 @@ const {
   getUserTransactionHistory, 
   getAllTransactionHistory, 
   getUserBalanceSummary,
-  getTransactionStats
+  getTransactionStats,
+  getAdminBalanceSheetData
 } = require('../controllers/transactionController');
 // const { authenticate } = require('../middleware/authMiddleware');
 // const { isAdmin, isOwnerOrAdmin } = require('../middleware/accessControlMiddleware');
@@ -43,5 +44,13 @@ router.get('/transactions/stats',
 
 // Audit Log for Admin Dashboard
 router.get('/admin-balance-sheet/audit-log', require('../controllers/transactionController').getAuditLog);
+
+// Route to get admin balance sheet data
+// Admin only access
+router.get('/admin-balance-sheet', 
+//   authenticate, 
+//   isAdmin, 
+  getAdminBalanceSheetData
+);
 
 module.exports = router;

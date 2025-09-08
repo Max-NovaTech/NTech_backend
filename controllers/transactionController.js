@@ -1,4 +1,5 @@
 const { getUserTransactions, getAllTransactions, getTransactionStatistics } = require('../services/transactionService');
+const prisma = require('../config/db');
 
 // Get transactions for a specific user (accessible by user and admin)
 const getUserTransactionHistory = async (req, res) => {
@@ -153,10 +154,133 @@ const getTransactionStats = async (req, res) => {
   }
 };
 
+// Get admin balance sheet data
+const getAdminBalanceSheetData = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    // Build date filter for transactions and topups
+    const dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.createdAt = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
+
+    // 1. Total Revenue (Sales) - Sum of all completed orders
+    const completedOrders = await prisma.orderItem.findMany({
+      where: {
+        status: 'Completed',
+        ...(startDate && endDate ? {
+          order: {
+            createdAt: {
+              gte: new Date(startDate),
+              lte: new Date(endDate)
+            }
+          }
+        } : {})
+      },
+      include: {
+        product: true,
+        order: true
+      }
+    });
+
+    const totalRevenue = completedOrders.reduce((sum, item) => {
+      return sum + (item.product.price * item.quantity);
+    }, 0);
+
+    // 2. Total Top-ups - Sum of all approved topups
+    const approvedTopups = await prisma.topUp.findMany({
+      where: {
+        status: 'Approved',
+        ...dateFilter
+      }
+    });
+
+    const totalTopups = approvedTopups.reduce((sum, topup) => sum + topup.amount, 0);
+
+    // 3. Total Refunds - Sum of all refund transactions
+    const refundTransactions = await prisma.transaction.findMany({
+      where: {
+        type: 'REFUND',
+        ...dateFilter
+      }
+    });
+
+    const totalRefunds = refundTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+
+    // 4. Previous Balance - Sum of all users' loan balances at end of yesterday
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(23, 59, 59, 999);
+
+    // Get the latest transaction for each user before midnight yesterday
+    const usersWithBalances = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        loanBalance: true
+      }
+    });
+
+    let previousBalance = 0;
+    for (const user of usersWithBalances) {
+      const lastTransaction = await prisma.transaction.findFirst({
+        where: {
+          userId: user.id,
+          createdAt: {
+            lte: yesterday
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      if (lastTransaction) {
+        previousBalance += lastTransaction.balance;
+      }
+    }
+
+    // Additional metrics for completeness
+    const orderCount = completedOrders.length;
+    const topupCount = approvedTopups.length;
+    const refundCount = refundTransactions.length;
+    const totalTopupsAndRefunds = totalTopups + totalRefunds;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalRevenue,
+        totalTopups,
+        totalRefunds,
+        totalTopupsAndRefunds,
+        previousBalance,
+        orderCount,
+        topupCount,
+        refundCount,
+        // Additional metrics
+        activeUsers: usersWithBalances.length,
+        netCashFlow: totalTopups + totalRefunds - totalRevenue
+      }
+    });
+
+  } catch (error) {
+    console.error("Error in getAdminBalanceSheetData:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || "Failed to retrieve admin balance sheet data" 
+    });
+  }
+};
+
 module.exports = {
   getUserTransactionHistory,
   getAllTransactionHistory,
   getUserBalanceSummary,
   getAuditLog,
-  getTransactionStats
+  getTransactionStats,
+  getAdminBalanceSheetData
 };
