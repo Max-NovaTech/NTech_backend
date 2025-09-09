@@ -76,27 +76,66 @@ const getUserBalanceSummary = async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
     
-    // Get latest transaction to find current balance
-    const latestTransaction = await getUserTransactions(userId, null, null, null);
-    
-    // Get transaction stats
-    const topupAmount = await calculateTotalByType(userId, 'TOPUP_APPROVED');
-    const orderAmount = await calculateTotalByType(userId, 'ORDER');
-    const loanRepayment = await calculateTotalByType(userId, 'LOAN_REPAYMENT');
-    const loanDeduction = await calculateTotalByType(userId, 'LOAN_DEDUCTION');
+    // Get current balance from user record directly (more efficient)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { loanBalance: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Use database aggregations instead of multiple service calls
+    const transactionStats = await prisma.transaction.groupBy({
+      by: ['type'],
+      where: { userId },
+      _sum: { amount: true },
+      _count: true
+    });
+
+    // Process stats efficiently
+    const stats = {
+      totalTopups: 0,
+      totalOrders: 0,
+      totalLoanRepayments: 0,
+      totalLoanDeductions: 0,
+      transactionCount: 0
+    };
+
+    transactionStats.forEach(stat => {
+      const amount = stat._sum.amount || 0;
+      const count = stat._count || 0;
+      stats.transactionCount += count;
+
+      switch (stat.type) {
+        case 'TOPUP_APPROVED':
+          stats.totalTopups = amount;
+          break;
+        case 'ORDER':
+          stats.totalOrders = Math.abs(amount);
+          break;
+        case 'LOAN_REPAYMENT':
+          stats.totalLoanRepayments = amount;
+          break;
+        case 'LOAN_DEDUCTION':
+          stats.totalLoanDeductions = Math.abs(amount);
+          break;
+      }
+    });
     
     res.status(200).json({
       success: true,
       data: {
-        currentBalance: latestTransaction.length > 0 ? latestTransaction[0].balance : 0,
+        currentBalance: user.loanBalance,
         statistics: {
-          totalTopups: topupAmount,
-          totalOrders: Math.abs(orderAmount), // Convert to positive for display
-          totalLoanRepayments: loanRepayment,
-          totalLoanDeductions: Math.abs(loanDeduction), // Convert to positive for display
-          totalLoanBalance: loanDeduction + loanRepayment // Remaining loan balance
+          ...stats,
+          totalLoanBalance: stats.totalLoanDeductions - stats.totalLoanRepayments
         },
-        transactionCount: latestTransaction.length
+        transactionCount: stats.transactionCount
       }
     });
   } catch (error) {
@@ -112,9 +151,10 @@ const getUserBalanceSummary = async (req, res) => {
 const getAuditLog = async (req, res) => {
   try {
     const { userId, start, end, type } = req.query;
-    // getAllTransactions should accept (start, end, type, userId)
-    const transactions = await getAllTransactions(start, end, type, userId);
-    res.status(200).json(transactions);
+    // getAllTransactions returns an object with data and pagination
+    const result = await getAllTransactions(start, end, type, userId);
+    // Return only the data array for frontend compatibility
+    res.status(200).json(result.data);
   } catch (error) {
     console.error("Error in getAuditLog:", error);
     res.status(500).json({ message: error.message || "Failed to retrieve audit log" });
@@ -168,8 +208,9 @@ const getAdminBalanceSheetData = async (req, res) => {
       };
     }
 
-    // 1. Total Revenue (Sales) - Sum of all completed orders
-    const completedOrders = await prisma.orderItem.findMany({
+    // Use database aggregations instead of loading all data into memory
+    // 1. Total Revenue (Sales) - Use aggregate query
+    const revenueAggregation = await prisma.orderItem.aggregate({
       where: {
         status: 'Completed',
         ...(startDate && endDate ? {
@@ -181,73 +222,79 @@ const getAdminBalanceSheetData = async (req, res) => {
           }
         } : {})
       },
-      include: {
-        product: true,
-        order: true
+      _sum: {
+        quantity: true
       }
     });
 
-    const totalRevenue = completedOrders.reduce((sum, item) => {
-      return sum + (item.product.price * item.quantity);
-    }, 0);
+    // Get revenue by joining with products - more efficient query
+    const revenueQuery = await prisma.$queryRaw`
+      SELECT COALESCE(SUM(oi.quantity * p.price), 0) as totalRevenue, COUNT(*) as orderCount
+      FROM OrderItem oi
+      JOIN Product p ON oi.productId = p.id
+      JOIN \`Order\` o ON oi.orderId = o.id
+      WHERE oi.status = 'Completed'
+      ${startDate && endDate ? 
+        `AND o.createdAt >= ${new Date(startDate)} AND o.createdAt <= ${new Date(endDate)}` : 
+        ''
+      }
+    `;
 
-    // 2. Total Top-ups - Sum of all approved topups
-    const approvedTopups = await prisma.topUp.findMany({
+    const totalRevenue = Number(revenueQuery[0]?.totalRevenue || 0);
+    const orderCount = Number(revenueQuery[0]?.orderCount || 0);
+
+    // 2. Total Top-ups - Use aggregate query
+    const topupAggregation = await prisma.topUp.aggregate({
       where: {
         status: 'Approved',
         ...dateFilter
-      }
+      },
+      _sum: {
+        amount: true
+      },
+      _count: true
     });
 
-    const totalTopups = approvedTopups.reduce((sum, topup) => sum + topup.amount, 0);
+    const totalTopups = topupAggregation._sum.amount || 0;
+    const topupCount = topupAggregation._count || 0;
 
-    // 3. Total Refunds - Sum of all refund transactions
-    const refundTransactions = await prisma.transaction.findMany({
+    // 3. Total Refunds - Use aggregate query
+    const refundAggregation = await prisma.transaction.aggregate({
       where: {
         type: 'REFUND',
         ...dateFilter
-      }
+      },
+      _sum: {
+        amount: true
+      },
+      _count: true
     });
 
-    const totalRefunds = refundTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalRefunds = refundAggregation._sum.amount || 0;
+    const refundCount = refundAggregation._count || 0;
 
-    // 4. Previous Balance - Sum of all users' loan balances at end of yesterday
+    // 4. Previous Balance - Use more efficient query
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(23, 59, 59, 999);
 
-    // Get the latest transaction for each user before midnight yesterday
-    const usersWithBalances = await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        loanBalance: true
-      }
-    });
+    // Get previous balance using a single aggregated query
+    const previousBalanceQuery = await prisma.$queryRaw`
+      SELECT COALESCE(SUM(t.balance), 0) as previousBalance
+      FROM Transaction t
+      INNER JOIN (
+        SELECT userId, MAX(createdAt) as maxCreatedAt
+        FROM Transaction
+        WHERE createdAt <= ${yesterday}
+        GROUP BY userId
+      ) latest ON t.userId = latest.userId AND t.createdAt = latest.maxCreatedAt
+    `;
 
-    let previousBalance = 0;
-    for (const user of usersWithBalances) {
-      const lastTransaction = await prisma.transaction.findFirst({
-        where: {
-          userId: user.id,
-          createdAt: {
-            lte: yesterday
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
+    const previousBalance = Number(previousBalanceQuery[0]?.previousBalance || 0);
 
-      if (lastTransaction) {
-        previousBalance += lastTransaction.balance;
-      }
-    }
+    // Get active users count efficiently
+    const activeUsersCount = await prisma.user.count();
 
-    // Additional metrics for completeness
-    const orderCount = completedOrders.length;
-    const topupCount = approvedTopups.length;
-    const refundCount = refundTransactions.length;
     const totalTopupsAndRefunds = totalTopups + totalRefunds;
 
     res.status(200).json({
@@ -262,7 +309,7 @@ const getAdminBalanceSheetData = async (req, res) => {
         topupCount,
         refundCount,
         // Additional metrics
-        activeUsers: usersWithBalances.length,
+        activeUsers: activeUsersCount,
         netCashFlow: totalTopups + totalRefunds - totalRevenue
       }
     });
@@ -276,11 +323,113 @@ const getAdminBalanceSheetData = async (req, res) => {
   }
 };
 
+// Search transactions across entire database
+const searchTransactions = async (req, res) => {
+  try {
+    const { 
+      search, 
+      typeFilter, 
+      amountFilter, 
+      startDate, 
+      endDate,
+      page = 1, 
+      limit = 100 
+    } = req.query;
+    
+    // Build where clause for search
+    const whereClause = {};
+    
+    // Date filter
+    if (startDate && endDate) {
+      whereClause.createdAt = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
+    
+    // Type filter
+    if (typeFilter) {
+      whereClause.type = typeFilter;
+    }
+    
+    // Amount filter
+    if (amountFilter === 'positive') {
+      whereClause.amount = { gt: 0 };
+    } else if (amountFilter === 'negative') {
+      whereClause.amount = { lt: 0 };
+    }
+    
+    // Search filter - search in user name and transaction description
+    if (search) {
+      whereClause.OR = [
+        {
+          description: {
+            contains: search,
+            mode: 'insensitive'
+          }
+        },
+        {
+          user: {
+            name: {
+              contains: search,
+              mode: 'insensitive'
+            }
+          }
+        }
+      ];
+    }
+    
+    // Get total count for pagination
+    const totalCount = await prisma.transaction.count({
+      where: whereClause
+    });
+    
+    // Get transactions with pagination
+    const transactions = await prisma.transaction.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      skip: (parseInt(page) - 1) * parseInt(limit),
+      take: parseInt(limit)
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: transactions,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / parseInt(limit)),
+        totalCount,
+        hasNextPage: parseInt(page) * parseInt(limit) < totalCount,
+        hasPreviousPage: parseInt(page) > 1
+      }
+    });
+    
+  } catch (error) {
+    console.error("Error in searchTransactions:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || "Failed to search transactions" 
+    });
+  }
+};
+
 module.exports = {
   getUserTransactionHistory,
   getAllTransactionHistory,
   getUserBalanceSummary,
   getAuditLog,
   getTransactionStats,
-  getAdminBalanceSheetData
+  getAdminBalanceSheetData,
+  searchTransactions
 };

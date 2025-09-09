@@ -76,6 +76,10 @@ model Order {
   items        OrderItem[]
 
   @@index([userId], map: "Order_userId_fkey")
+  @@index([createdAt])
+  @@index([status])
+  @@index([mobileNumber])
+  @@index([userId, createdAt])
   @@map("Order")
 }
 
@@ -91,6 +95,9 @@ model OrderItem {
 
   @@index([orderId], map: "OrderItem_orderId_fkey")
   @@index([productId], map: "OrderItem_productId_fkey")
+  @@index([status])
+  @@index([mobileNumber])
+  @@index([orderId, status])
   @@map("OrderItem")
 }
 
@@ -136,7 +143,7 @@ model Transaction {
   userId         Int
   amount         Float
   balance        Float
-  previousBalance Float    @default(0) // 👈 ADD THIS FIELD
+  previousBalance Float    @default(0) 
   type           String    @db.VarChar(191)
   description    String    @db.Text
   reference      String?   @db.VarChar(255)
@@ -144,6 +151,10 @@ model Transaction {
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_user_transaction")
 
   @@index([userId], map: "fk_user_transaction")
+  @@index([userId, createdAt])
+  @@index([type])
+  @@index([createdAt])
+  @@index([reference])
   @@map("Transaction")
 }
 

@@ -1,4 +1,5 @@
 const prisma = require("../config/db");
+const cache = require("../utils/cache");
 
 /**
  * Creates a transaction record
@@ -85,8 +86,15 @@ const createTransaction = async (userId, amount, type, description, reference = 
  * @returns {Promise<Array>} Transaction history
  */
 
-const getUserTransactions = async (userId, startDate = null, endDate = null, type = null) => {
+const getUserTransactions = async (userId, startDate = null, endDate = null, type = null, limit = 1000) => {
   try {
+    // Create cache key for this query
+    const cacheKey = `user_transactions_${userId}_${startDate}_${endDate}_${type}_${limit}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const whereClause = { userId };
     
     // Add date filters if provided
@@ -102,7 +110,7 @@ const getUserTransactions = async (userId, startDate = null, endDate = null, typ
       whereClause.type = type;
     }
     
-    return await prisma.transaction.findMany({
+    const result = await prisma.transaction.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -117,8 +125,13 @@ const getUserTransactions = async (userId, startDate = null, endDate = null, typ
           select: { name: true }
         }
       },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
+      take: limit // Add limit to prevent excessive memory usage
     });
+
+    // Cache for 2 minutes for frequently accessed user data
+    cache.set(cacheKey, result, 120000);
+    return result;
   } catch (error) {
     console.error("Error fetching user transactions:", error);
     throw new Error(`Failed to retrieve transaction history: ${error.message}`);

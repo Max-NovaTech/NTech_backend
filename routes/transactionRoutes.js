@@ -3,9 +3,11 @@ const router = express.Router();
 const { 
   getUserTransactionHistory, 
   getAllTransactionHistory, 
-  getUserBalanceSummary,
+  getUserBalanceSummary, 
+  getAuditLog, 
   getTransactionStats,
-  getAdminBalanceSheetData
+  getAdminBalanceSheetData,
+  searchTransactions
 } = require('../controllers/transactionController');
 // const { authenticate } = require('../middleware/authMiddleware');
 // const { isAdmin, isOwnerOrAdmin } = require('../middleware/accessControlMiddleware');
@@ -46,11 +48,17 @@ router.get('/transactions/stats',
 router.get('/admin-balance-sheet/audit-log', require('../controllers/transactionController').getAuditLog);
 
 // Route to get admin balance sheet data
-// Admin only access
 router.get('/admin-balance-sheet', 
 //   authenticate, 
 //   isAdmin, 
   getAdminBalanceSheetData
+);
+
+// Route to search transactions across entire database
+router.get('/search', 
+//   authenticate, 
+//   isAdmin, 
+  searchTransactions
 );
 
 module.exports = router;
