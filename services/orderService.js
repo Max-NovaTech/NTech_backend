@@ -487,21 +487,70 @@ const getOrderStatus = async (options = {}) => {
     });
   }
 
-  // Sort combined data by createdAt (newest first)
-  transformedData.sort((a, b) => new Date(b.order.createdAt) - new Date(a.order.createdAt));
+  // Apply filters to both regular and shop orders
+  let filteredData = transformedData;
 
-  // Get shop count for total
-  const shopCount = await prisma.shop.count();
-  const combinedTotal = totalCount + shopCount;
+  // Filter by phone number
+  if (phoneNumberFilter) {
+    filteredData = filteredData.filter(item => 
+      item.mobileNumber && item.mobileNumber.includes(phoneNumberFilter)
+    );
+  }
+
+  // Filter by product name
+  if (selectedProduct) {
+    filteredData = filteredData.filter(item => 
+      item.product.name && item.product.name.includes(selectedProduct)
+    );
+  }
+
+  // Filter by status
+  if (selectedStatusMain && selectedStatusMain !== 'All Status') {
+    filteredData = filteredData.filter(item => 
+      item.order.items[0] && item.order.items[0].status === selectedStatusMain
+    );
+  }
+
+  // Filter by date
+  if (selectedDate) {
+    const startDate = new Date(selectedDate);
+    const endDate = new Date(selectedDate);
+    endDate.setDate(endDate.getDate() + 1);
+    
+    filteredData = filteredData.filter(item => {
+      const itemDate = new Date(item.order.createdAt);
+      return itemDate >= startDate && itemDate < endDate;
+    });
+  }
+
+  // Filter by order ID
+  if (orderIdFilter) {
+    const searchId = parseInt(orderIdFilter);
+    filteredData = filteredData.filter(item => 
+      item.orderId === searchId || item.orderId.toString() === orderIdFilter
+    );
+  }
+
+  // Filter by new requests (last 5 minutes)
+  if (showNewRequestsOnly) {
+    filteredData = filteredData.filter(item => item.isNew);
+  }
+
+  // Sort combined data by createdAt (newest first)
+  filteredData.sort((a, b) => new Date(b.order.createdAt) - new Date(a.order.createdAt));
+
+  // Apply pagination after filtering
+  const filteredTotal = filteredData.length;
+  const paginatedData = filteredData.slice(skip, skip + limit);
 
   return {
-    data: transformedData,
+    data: paginatedData,
     pagination: {
-      total: combinedTotal,
+      total: filteredTotal,
       page: parseInt(page),
       limit: parseInt(limit),
-      totalPages: Math.ceil(combinedTotal / limit),
-      hasMore: (page * limit) < combinedTotal
+      totalPages: Math.ceil(filteredTotal / limit),
+      hasMore: (page * limit) < filteredTotal
     }
   };
 };
