@@ -78,6 +78,29 @@ const getPriceForUserRole = (role, product) => {
   return product.price;
 };
 
+// Get products where showOnShop = true and stock > 0
+const getShopProducts = async () => {
+  return await prisma.product.findMany({
+    where: {
+      showOnShop: true,
+      stock: {
+        gt: 0
+      }
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+};
+
+// Toggle showOnShop for a product
+const toggleShowOnShop = async (id, showOnShop) => {
+  return await prisma.product.update({
+    where: { id },
+    data: { showOnShop }
+  });
+};
+
 module.exports = {
   addProduct,
   getAllProducts,
@@ -86,5 +109,7 @@ module.exports = {
   deleteProduct,
   setProductStockToZero,
   setAllProductStockToZero,
-  getPriceForUserRole
+  getPriceForUserRole,
+  getShopProducts,
+  toggleShowOnShop
 };

@@ -59,6 +59,7 @@ model Product {
   description String?
   price       Float
   stock       Int         @default(0)
+  showOnShop  Boolean     @default(false)
   createdAt   DateTime    @default(now())
   CartItem    CartItem[]
   OrderItem   OrderItem[]
@@ -171,7 +172,6 @@ model Announcement {
   @@map("Announcements")
 }
 
-
 model SmsMessage {
   id          Int      @id @default(autoincrement())
   phoneNumber String   @db.VarChar(20)
@@ -182,4 +182,44 @@ model SmsMessage {
   createdAt   DateTime @default(now())
   
   @@map("SmsMessage")
+}
+
+model Shop {
+  id                 Int      @id @default(autoincrement())
+  amount             Float
+  reference          String   @db.VarChar(255)
+  phoneNumber        String   @db.VarChar(20)
+  message            String?  @db.Text
+  deduction          Float?
+  fullName           String?  @db.VarChar(255)
+  productName        String?  @db.VarChar(255)
+  productDescription String?  @db.VarChar(255)
+  productPrice       Float?
+  status             String   @default("Pending")
+  orderTime          DateTime @default(now())
+  createdAt          DateTime @default(now())
+  
+  @@index([reference])
+  @@index([phoneNumber])
+  @@index([orderTime])
+  @@index([status])
+  @@map("Shop")
+}
+
+model Complaint {
+  id             Int      @id @default(autoincrement())
+  fullName       String   @db.VarChar(255)
+  mobileNumber   String   @db.VarChar(20)
+  productName    String   @db.VarChar(255)
+  productCost    Float
+  transactionId  String   @db.VarChar(255)
+  complaint      String   @db.Text
+  orderTime      DateTime
+  createdAt      DateTime @default(now())
+  status         String   @default("Pending")
+  
+  @@index([mobileNumber])
+  @@index([transactionId])
+  @@index([status])
+  @@map("Complaint")
 }

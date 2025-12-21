@@ -60,10 +60,10 @@ const updateUser = async (req, res, io, userSockets) => {
           ? 'Your user role has been changed by an administrator. Please log in again.'
           : 'Your password was changed by an administrator. Please log in again.';
         
-        console.log(`[Socket Debug] Forcing logout for user ${id}. Reason: ${roleChanged ? 'Role Change' : 'Password Change'}.`);
+        //console.log(`[Socket Debug] Forcing logout for user ${id}. Reason: ${roleChanged ? 'Role Change' : 'Password Change'}.`);
         io.to(socketId).emit('force-logout', { message });
       } else {
-        console.log(`[Socket Debug] User ${id} is offline. Cannot send force-logout.`);
+        // console.log(`[Socket Debug] User ${id} is offline. Cannot send force-logout.`);
       }
     }
 
@@ -114,7 +114,7 @@ const refundUser = async (req, res) => {
 const updateLoanStatus = async (req, res) => {
   const { userId, hasLoan } = req.body;
 
-  console.log("Received userId:", userId, "Type:", typeof userId); // Debugging log
+  //console.log("Received userId:", userId, "Type:", typeof userId); // Debugging log
 
   if (!userId || isNaN(userId)) {
     return res.status(400).json({ error: "Invalid user ID: userId must be a number." });
@@ -226,7 +226,7 @@ const uploadExcel = async (req, res) => {
       return res.status(400).json({ error: "User ID is required" });
     }
 
-    console.log("File uploaded:", req.file.path);
+    //console.log("File uploaded:", req.file.path);
 
     const result = await userService.processExcelFile(
       req.file.path,
@@ -270,7 +270,7 @@ const downloadExcel = async (req, res) => {
     const { filename } = req.params;
     const { userId } = req.body; // Get userId from request body
 
-    console.log({filename, userId})
+    //console.log({filename, userId})
 
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });
@@ -281,7 +281,7 @@ const downloadExcel = async (req, res) => {
       where: { filename, userId },
     });
 
-    console.log({file})
+    //console.log({file})
 
     if (!file) {
       return res.status(404).json({ error: "File not found or unauthorized" });
@@ -289,7 +289,7 @@ const downloadExcel = async (req, res) => {
 
     const filePath = path.join(__dirname, "../uploads", filename);
 
-    console.log("Attempting to download:", filePath);
+    //console.log("Attempting to download:", filePath);
 
     if (!fs.existsSync(filePath)) {
       console.error("File not found on server:", filePath);
@@ -301,14 +301,14 @@ const downloadExcel = async (req, res) => {
 
     res.download(filePath, filename, (err) => {
       if (err) {
-        console.error("Download Error:", err);
+        //console.error("Download Error:", err);
         res.status(500).json({ error: "Failed to download file" });
       } else {
-        console.log("File successfully downloaded:", filename);
+        // console.log("File successfully downloaded:", filename);
       }
     });
   } catch (error) {
-    console.error("Download Error:", error);
+    //console.error("Download Error:", error);
     res.status(500).json({ error: "Failed to download file" });
   }
 };

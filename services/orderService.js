@@ -3,6 +3,13 @@ const cache = require("../utils/cache");
 
 const { createTransaction } = require("./transactionService");
 const userService = require("./userService");
+const { emitNewOrder, emitOrderStatusUpdate } = require("../utils/socketEmitter");
+
+// Get io instance - will be set by the controller
+let ioInstance = null;
+const setIoInstance = (io) => {
+  ioInstance = io;
+};
 
 const submitCart = async (userId, mobileNumber = null) => {
   // Use a transaction to ensure atomicity
@@ -71,11 +78,17 @@ const submitCart = async (userId, mobileNumber = null) => {
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
 
     return order;
+  }).then(order => {
+    // Emit socket event after transaction completes
+    if (ioInstance) {
+      emitNewOrder(ioInstance, order);
+    }
+    return order;
   });
 };
 
 async function getAllOrders(limit = 100, offset = 0) {
-  // Optimize query with selective field loading and better pagination
+  // Fetch regular orders
   const orders = await prisma.order.findMany({
     take: Math.min(limit, 500), // Cap limit to prevent excessive memory usage
     skip: offset,
@@ -114,14 +127,81 @@ async function getAllOrders(limit = 100, offset = 0) {
       },
     },
   });
+
+  // Fetch shop orders
+  const shopOrders = await prisma.shop.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  //console.log(`[OrderService] Found ${shopOrders.length} shop orders`);
+
+  // Transform shop orders to match Order format
+  const transformedShopOrders = shopOrders.map((shop) => {
+    // Log each shop order to debug
+    /* console.log(`[OrderService] Processing shop order ID ${shop.id}:`, {
+      productName: shop.productName,
+      productPrice: shop.productPrice,
+      amount: shop.amount,
+      fullName: shop.fullName,
+      reference: shop.reference
+    }); */
+
+    const transformed = {
+      id: `SHOP-${shop.id}`, // Prefix to distinguish from regular orders
+      createdAt: shop.orderTime,
+      status: "Completed", // Shop orders are auto-processed
+      mobileNumber: shop.phoneNumber,
+      user: {
+        id: null,
+        name: shop.fullName || "Shop Customer",
+        email: null,
+        phone: shop.phoneNumber,
+      },
+      items: [
+        {
+          id: shop.id,
+          productId: null,
+          quantity: 1,
+          mobileNumber: shop.phoneNumber,
+          status: "Completed",
+          product: {
+            id: null,
+            name: shop.productName || "Shop Product",
+            description: shop.productDescription || `Transaction: ${shop.reference}`,
+            price: shop.productPrice || shop.amount,
+          },
+        },
+      ],
+    };
+
+    /* console.log(`[OrderService] Transformed shop order ID ${shop.id}:`, {
+      productName: transformed.items[0].product.name,
+      productPrice: transformed.items[0].product.price,
+      description: transformed.items[0].product.description
+    }); */
+
+    return transformed;
+  });
+
+  // Combine both order types and sort by date
+  const allOrders = [...orders, ...transformedShopOrders].sort((a, b) =>
+    new Date(b.createdAt) - new Date(a.createdAt)
+  );
+
+  // Apply pagination to combined results
+  const paginatedOrders = allOrders.slice(offset, offset + Math.min(limit, 500));
   
-  // Get total count for pagination
+  // Get total count
   const totalCount = await prisma.order.count();
+  const shopCount = await prisma.shop.count();
+  const combinedCount = totalCount + shopCount;
   
   return {
-    orders,
-    totalCount,
-    hasMore: (offset + limit) < totalCount
+    orders: paginatedOrders,
+    totalCount: combinedCount,
+    hasMore: (offset + limit) < combinedCount
   };
 }
 
@@ -365,14 +445,63 @@ const getOrderStatus = async (options = {}) => {
     }
   }
 
+  // Fetch and include shop orders
+  const shopOrders = await prisma.shop.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  // Transform shop orders to match the same format
+  for (const shop of shopOrders) {
+    const shopCreatedAt = new Date(shop.createdAt).getTime();
+    const isNew = shopCreatedAt > fiveMinutesAgo;
+    
+    transformedData.push({
+      id: shop.id,
+      orderId: shop.id,
+      productId: null,
+      quantity: 1,
+      mobileNumber: shop.phoneNumber,
+      isShopOrder: true,
+      user: {
+        id: null,
+        name: "shop",
+        email: null,
+        phone: shop.phoneNumber
+      },
+      product: {
+        id: null,
+        name: shop.productName || "Shop Product",
+        description: shop.productDescription || `Ref: ${shop.reference}`,
+        price: shop.productPrice || shop.amount
+      },
+      order: {
+        id: shop.id,
+        createdAt: shop.createdAt,
+        items: [{
+          status: shop.status || "Pending"
+        }]
+      },
+      isNew
+    });
+  }
+
+  // Sort combined data by createdAt (newest first)
+  transformedData.sort((a, b) => new Date(b.order.createdAt) - new Date(a.order.createdAt));
+
+  // Get shop count for total
+  const shopCount = await prisma.shop.count();
+  const combinedTotal = totalCount + shopCount;
+
   return {
     data: transformedData,
     pagination: {
-      total: totalCount,
+      total: combinedTotal,
       page: parseInt(page),
       limit: parseInt(limit),
-      totalPages: Math.ceil(totalCount / limit),
-      hasMore: (page * limit) < totalCount
+      totalPages: Math.ceil(combinedTotal / limit),
+      hasMore: (page * limit) < combinedTotal
     }
   };
 };
@@ -403,8 +532,54 @@ const getUserCompletedOrders = async (userId) => {
   });
 };
 
-const updateOrderItemsStatus = async (orderId, newStatus) => {
+const updateOrderItemsStatus = async (orderId, newStatus, isShopOrder = false) => {
   try {
+    // Define final statuses that cannot be changed
+    const finalStatuses = ['Completed', 'Cancelled', 'Canceled'];
+    
+    // console.log(`[Status Update] Updating order ${orderId}, isShopOrder: ${isShopOrder}, newStatus: ${newStatus}`);
+    
+    // If explicitly marked as shop order, update Shop table
+    if (isShopOrder) {
+      const shopOrder = await prisma.shop.findUnique({
+        where: { id: parseInt(orderId) }
+      });
+
+      if (!shopOrder) {
+        //console.log(`[Shop] Shop order ${orderId} not found`);
+        return {
+          success: false,
+          updatedCount: 0,
+          message: `Shop order ${orderId} not found`
+        };
+      }
+
+      // Check if shop order has a final status
+      if (finalStatuses.includes(shopOrder.status)) {
+        //console.log(`[Shop] Cannot update shop order ${orderId} - status is already ${shopOrder.status}`);
+        return {
+          success: false,
+          updatedCount: 0,
+          message: `Cannot update order - status is already ${shopOrder.status}`
+        };
+      }
+      
+      // Update status in Shop table
+      await prisma.shop.update({
+        where: { id: parseInt(orderId) },
+        data: { status: newStatus }
+      });
+      
+      //console.log(`[Shop] Updated shop order ${orderId} status to ${newStatus}`);
+      
+      return {
+        success: true,
+        updatedCount: 1,
+        message: `Successfully updated shop order ${orderId} to ${newStatus}`
+      };
+    }
+
+    // Regular order - check Order table
     const order = await prisma.order.findUnique({ 
       where: { id: parseInt(orderId) }, 
       select: { userId: true } 
@@ -412,6 +587,21 @@ const updateOrderItemsStatus = async (orderId, newStatus) => {
     
     if (!order) {
       throw new Error("Order not found");
+    }
+    
+    // Check if regular order items have a final status
+    const orderItems = await prisma.orderItem.findMany({
+      where: { orderId: parseInt(orderId) },
+      select: { status: true }
+    });
+    
+    if (orderItems.length > 0 && finalStatuses.includes(orderItems[0].status)) {
+      //console.log(`[Order] Cannot update order ${orderId} - status is already ${orderItems[0].status}`);
+      return {
+        success: false,
+        updatedCount: 0,
+        message: `Cannot update order - status is already ${orderItems[0].status}`
+      };
     }
     
     // If status is cancelled/canceled, handle refund logic
@@ -465,7 +655,7 @@ const updateOrderItemsStatus = async (orderId, newStatus) => {
           );
         }
       } else {
-        console.log(`Refund already processed for order ${orderId}. Skipping duplicate refund.`);
+        // console.log(`Refund already processed for order ${orderId}. Skipping duplicate refund.`);
       }
     }
     
@@ -674,6 +864,6 @@ module.exports = {
   getOrderStatus,
   getOrderHistory,
   updateOrderItemsStatus,
-
+  setIoInstance,
   orderService
 };

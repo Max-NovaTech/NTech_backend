@@ -79,7 +79,7 @@ class MemoryMonitor {
    */
   log(label = 'Memory Usage') {
     const usage = this.getCurrentUsage();
-    console.log(`[${label}] RSS: ${usage.rss}MB, Heap: ${usage.heapUsed}/${usage.heapTotal}MB`);
+    // console.log(`[${label}] RSS: ${usage.rss}MB, Heap: ${usage.heapUsed}/${usage.heapTotal}MB`);
   }
 
   /**

@@ -48,6 +48,8 @@ exports.getAllOrders = async (req, res) => {
       }))
     );
     
+    // Debug logging removed for production
+    
     res.json(transformedData);
   } catch (error) {
     console.error('Error in getAllOrders:', error);
@@ -152,7 +154,9 @@ exports.getOrderHistory = async (req, res) => {
 exports.updateOrderItemsStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { status } = req.body;
+    const { status, isShopOrder } = req.body;
+    
+    // console.log(`[Controller] updateOrderItemsStatus called - orderId: ${orderId}, status: ${status}, isShopOrder: ${isShopOrder}, body:`, req.body);
     
     // Validate inputs
     if (!orderId) {
@@ -172,7 +176,7 @@ exports.updateOrderItemsStatus = async (req, res) => {
       });
     }
     
-    const result = await updateOrderItemsStatus(orderId, status);
+    const result = await updateOrderItemsStatus(orderId, status, isShopOrder);
     return res.status(200).json(result);
   } catch (error) {
     console.error("Controller error:", error);
@@ -218,7 +222,7 @@ exports.getOrders = async (req, res) => {
 
 // Excel Upload Controller for Agent Orders
 exports.uploadExcelOrders = async (req, res) => {
-  console.log('--- [UPLOAD EXCEL ORDERS] Endpoint hit ---');
+  // console.log('--- [UPLOAD EXCEL ORDERS] Endpoint hit ---');
   const prisma = require('../config/db');
   const userService = require('../services/userService');
   const productService = require('../services/productService');
@@ -229,7 +233,7 @@ exports.uploadExcelOrders = async (req, res) => {
   try {
     const { agentId, network } = req.body;
     if (!req.file) {
-      console.log('ERROR: No file uploaded.');
+      // console.log('ERROR: No file uploaded.');
       return res.status(400).json({ success: false, message: 'No file uploaded.' });
     }
     if (!agentId || !network) {
@@ -243,19 +247,19 @@ exports.uploadExcelOrders = async (req, res) => {
       const workbook = xlsx.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
       data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-      console.log('Excel parsed. Rows found:', data.length);
+      // console.log('Excel parsed. Rows found:', data.length);
       if (data.length > 0) {
-        console.log('First row sample:', data[0]);
+        // console.log('First row sample:', data[0]);
       }
     } catch (parseErr) {
-      console.log('ERROR parsing Excel file:', parseErr);
+      // console.log('ERROR parsing Excel file:', parseErr);
       return res.status(400).json({ success: false, message: 'Failed to parse Excel file.' });
     }
 
     let total = data.length;
     let errorReport = [];
     if (total === 0) {
-      console.log('WARNING: Excel file parsed but contains zero rows.');
+      console.warn('Excel file parsed but contains zero rows.');
     }
 
     // Fetch agent/user and role
@@ -334,7 +338,7 @@ exports.uploadExcelOrders = async (req, res) => {
     fs.unlinkSync(filePath);
     return res.json({ success: true, message: `${added} products added to cart.`, summary: { total, added } });
   } catch (err) {
-    console.log('ERROR in uploadExcelOrders:', err);
+    // console.log('ERROR in uploadExcelOrders:', err);
     if (req.file && req.file.path) try { fs.unlinkSync(req.file.path); } catch (e) {}
     res.status(500).json({ success: false, message: err.message });
   }
@@ -362,7 +366,7 @@ exports.downloadSimplifiedTemplate = (req, res) => {
 
 // New Excel Upload Controller for Simplified (2-column) Agent Orders
 exports.uploadSimplifiedExcelOrders = async (req, res) => {
-  console.log('--- [UPLOAD SIMPLIFIED EXCEL ORDERS] Endpoint hit ---');
+  // console.log('--- [UPLOAD SIMPLIFIED EXCEL ORDERS] Endpoint hit ---');
   const prisma = require('../config/db');
   const userService = require('../services/userService');
   const cartService = require('../services/cartService');
@@ -372,7 +376,7 @@ exports.uploadSimplifiedExcelOrders = async (req, res) => {
   try {
     const { agentId, network } = req.body;
     if (!req.file) {
-      console.log('ERROR: No file uploaded.');
+      // console.log('ERROR: No file uploaded.');
       return res.status(400).json({ success: false, message: 'No file uploaded.' });
     }
     if (!agentId || !network) {
@@ -385,16 +389,16 @@ exports.uploadSimplifiedExcelOrders = async (req, res) => {
       const workbook = xlsx.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
       data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-      console.log('Simplified Excel parsed. Rows found:', data.length);
+      // console.log('Simplified Excel parsed. Rows found:', data.length);
     } catch (parseErr) {
-      console.log('ERROR parsing Excel file:', parseErr);
+      // console.log('ERROR parsing Excel file:', parseErr);
       return res.status(400).json({ success: false, message: 'Failed to parse Excel file.' });
     }
 
     let total = data.length;
     let errorReport = [];
     if (total === 0) {
-      console.log('WARNING: Excel file parsed but contains zero rows.');
+      console.warn('Excel file parsed but contains zero rows.');
     }
 
     const agent = await userService.getUserById(parseInt(agentId));
@@ -430,7 +434,7 @@ exports.uploadSimplifiedExcelOrders = async (req, res) => {
       }
 
       // --- DEBUG LOGGING ---
-      console.log(`Searching for product with NAME: [${productName}] and DESCRIPTION: [${productDescription}]`);
+      // console.log(`Searching for product with NAME: [${productName}] and DESCRIPTION: [${productDescription}]`);
       // --------------------
 
       const product = await prisma.product.findFirst({
@@ -444,12 +448,12 @@ exports.uploadSimplifiedExcelOrders = async (req, res) => {
         rowErrors.push(`Product not found for your user type (${userRole}) with bundle ${productDescription} and network ${network}.`);
 
         // --- DEBUG: Log all available products for easier debugging ---
-        console.log('--- AVAILABLE PRODUCTS IN DATABASE ---');
+        // console.log('--- AVAILABLE PRODUCTS IN DATABASE ---');
         const allProducts = await prisma.product.findMany({
           select: { name: true, description: true, stock: true }
         });
         console.table(allProducts);
-        console.log('-----------------------------------------');
+        // console.log('-----------------------------------------');
         // ----------------------------------------------------------
       } else {
           productsToAdd.push({ 
@@ -488,7 +492,7 @@ exports.uploadSimplifiedExcelOrders = async (req, res) => {
     });
 
   } catch (err) {
-    console.log('ERROR in uploadSimplifiedExcelOrders:', err);
+    console.error('ERROR in uploadSimplifiedExcelOrders:', err.message);
     if (req.file && req.file.path) try { fs.unlinkSync(req.file.path); } catch (e) {}
     res.status(500).json({ success: false, message: err.message });
   }

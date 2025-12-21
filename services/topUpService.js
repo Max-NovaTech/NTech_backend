@@ -1,8 +1,15 @@
 // const { PrismaClient } = require('@prisma/client');
 const { createTransaction } = require('./transactionService');
 const smsService = require('./smsService');
+const { emitNewTopup } = require('../utils/socketEmitter');
 
 const prisma = require("../config/db");
+
+// Get io instance - will be set by the controller
+let ioInstance = null;
+const setIoInstance = (io) => {
+  ioInstance = io;
+};
 
 const verifyAndAutoTopUp = async (userId, referenceId, retries = 3) => {
   try {
@@ -72,6 +79,11 @@ const verifyAndAutoTopUp = async (userId, referenceId, retries = 3) => {
       };
     });
     // --- End Atomic Transaction ---
+
+    // Emit socket event after transaction completes
+    if (ioInstance) {
+      emitNewTopup(ioInstance, result);
+    }
 
     return result;
 
@@ -258,5 +270,6 @@ module.exports = {
   updateTopUpStatus,
   getTopUps,
   getAllTopUps,
-  verifyAndAutoTopUp
+  verifyAndAutoTopUp,
+  setIoInstance
 };

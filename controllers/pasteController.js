@@ -3,7 +3,7 @@ const userService = require('../services/userService');
 const cartService = require('../services/cartService');
 
 exports.pasteAndProcessOrders = async (req, res) => {
-  console.log('--- [PASTE AND PROCESS ORDERS] Endpoint hit ---');
+  // console.log('--- [PASTE AND PROCESS ORDERS] Endpoint hit ---');
 
   try {
     const { agentId, network, textData } = req.body;
@@ -85,7 +85,7 @@ exports.pasteAndProcessOrders = async (req, res) => {
     return res.json({ success: true, message: `${productsToAdd.length} products added to cart.` });
 
   } catch (err) {
-    console.log('ERROR in pasteAndProcessOrders:', err);
+    console.error('ERROR in pasteAndProcessOrders:', err.message);
     res.status(500).json({ success: false, message: err.message });
   }
 };

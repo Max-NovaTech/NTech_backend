@@ -52,11 +52,11 @@ class SmsService {
     }
     
     // Log for debugging
-    console.log('Parsing SMS:', message);
+    /* console.log('Parsing SMS:', message);
     console.log('Amount match (Pattern 1):', amountMatch1);
     console.log('Amount match (Pattern 2):', amountMatch2);
     console.log('Final amount:', amount);
-    console.log('Transaction ID match:', transactionIdMatch);
+    console.log('Transaction ID match:', transactionIdMatch); */
     
     return {
       amount: amount,

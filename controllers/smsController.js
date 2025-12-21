@@ -13,12 +13,12 @@ class SmsController {
         });
       }
 
-      console.log("Received SMS:", { from, message, timestamp });
+      //console.log("Received SMS:", { from, message, timestamp });
 
       // Save SMS using service
       const smsRecord = await smsService.saveSmsMessage(from, message);
 
-      console.log("SMS saved:", smsRecord);
+      //console.log("SMS saved:", smsRecord);
 
       res.status(200).json({
         success: true,

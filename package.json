@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js",
+    "start": "node --max-old-space-size=256 --expose-gc index.js",
+    "start:prod": "NODE_ENV=production node --max-old-space-size=256 --expose-gc index.js",
     "dev": "nodemon index.js"
   },
   "keywords": [],

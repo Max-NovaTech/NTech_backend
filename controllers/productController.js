@@ -92,6 +92,30 @@ const resetAllProductStock = async (req, res) => {
 
 
 
+// Get products where showOnShop = true
+const getShopProducts = async (req, res) => {
+  try {
+    const products = await productService.getShopProducts();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Toggle showOnShop for a product
+const toggleShowOnShop = async (req, res) => {
+  try {
+    const { showOnShop } = req.body;
+    const product = await productService.toggleShowOnShop(
+      parseInt(req.params.id),
+      showOnShop
+    );
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   addProduct,
   getAllProducts,
@@ -99,5 +123,7 @@ module.exports = {
   updateProduct,
   deleteProduct,
   setProductStockToZero,
-  resetAllProductStock
+  resetAllProductStock,
+  getShopProducts,
+  toggleShowOnShop
 };

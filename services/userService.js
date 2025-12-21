@@ -97,7 +97,7 @@ const updateLoanStatus = async (userId, hasLoan) => {
 };
 
 const updateUserLoanStatus = async (userId, hasLoan, deductionAmount) => {
-  console.log("Updating user loan status:", { userId, hasLoan, deductionAmount });
+  //console.log("Updating user loan status:", { userId, hasLoan, deductionAmount });
   try {
     if (!userId || isNaN(userId)) {
       throw new Error("Invalid userId provided");
@@ -149,7 +149,7 @@ const updateUserLoanStatus = async (userId, hasLoan, deductionAmount) => {
           reference: `user:${userIdInt}`
         }
       });
-      console.log("Database update result:", updatedUser);
+      //console.log("Database update result:", updatedUser);
       return updatedUser;
     });
   } catch (error) {
@@ -159,7 +159,7 @@ const updateUserLoanStatus = async (userId, hasLoan, deductionAmount) => {
 };
 
 const updateAdminLoanBalance = async (userId, deductionAmount) => {
-  console.log("Updating adminLoanBalance:", { userId, deductionAmount });
+  //console.log("Updating adminLoanBalance:", { userId, deductionAmount });
   try {
     if (!userId || isNaN(userId)) {
       throw new Error("Invalid userId provided");
@@ -179,7 +179,7 @@ const updateAdminLoanBalance = async (userId, deductionAmount) => {
     if (updatedAdminLoanBalance < 0) {
       throw new Error("Insufficient balance for this deduction.");
     }
-    console.log("New adminLoanBalance after deduction:", updatedAdminLoanBalance);
+    //console.log("New adminLoanBalance after deduction:", updatedAdminLoanBalance);
     // Record the loan deduction transaction
     await createTransaction(
       parseInt(userId, 10),
@@ -196,7 +196,7 @@ const updateAdminLoanBalance = async (userId, deductionAmount) => {
         hasLoan: updatedAdminLoanBalance > 0, // Automatically set hasLoan true if balance > 0
       },
     });
-    console.log("Database update result:", updatedUser);
+    //console.log("Database update result:", updatedUser);
     return updatedUser;
   } catch (error) {
     console.error("Error updating adminLoanBalance:", error.message);
@@ -290,7 +290,7 @@ const repayLoan = async (userId, amount) => {
         hasLoan: hasLoanAfterRepayment, // Must be boolean for Prisma/DB
       },
     });
-    console.log('DEBUG: Updated user after repayment:', updatedUser);
+    //console.log('DEBUG: Updated user after repayment:', updatedUser);
     
     // Record the loan repayment transaction with correct prev/new balances
     await prisma.transaction.create({
@@ -379,7 +379,7 @@ const processExcelFile = async (filePath, filename, userId, network) => {
       throw new Error("Excel file is empty or formatted incorrectly.");
     }
 
-    console.log("Extracted Data from Excel:", sheetData); // Debugging log
+    //console.log("Extracted Data from Excel:", sheetData); // Debugging log
 
     // Standardize column names and convert username to price
     const formattedData = sheetData.map(row => ({
@@ -394,7 +394,7 @@ const processExcelFile = async (filePath, filename, userId, network) => {
     );
 
     if (!validData.length) {
-      console.log("No valid purchases found in the uploaded file.");
+      //console.log("No valid purchases found in the uploaded file.");
       return { message: "No valid purchases found." };
     }
 
@@ -418,7 +418,7 @@ const processExcelFile = async (filePath, filename, userId, network) => {
 
     await prisma.purchase.createMany({ data: purchaseData });
 
-    console.log("Inserted Purchases:", purchaseData);
+    //console.log("Inserted Purchases:", purchaseData);
 
     return { message: "File processed successfully", uploadedFile };
   } catch (error) {
