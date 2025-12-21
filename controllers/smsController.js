@@ -88,6 +88,57 @@ class SmsController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // Verify transaction amount for shop orders
+  async verifyTransactionAmount(req, res) {
+    try {
+      const { transactionId, productPrice } = req.body;
+
+      if (!transactionId || productPrice === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID and product price are required"
+        });
+      }
+
+      // Find the SMS message with this transaction ID
+      const smsRecord = await smsService.findSmsByReference(transactionId);
+
+      if (!smsRecord) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID not found in our system. Please verify your transaction ID."
+        });
+      }
+
+      const transactionAmount = smsRecord.amount;
+
+      // Check if transaction amount is sufficient
+      if (transactionAmount < productPrice) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient payment. Transaction amount (GHS ${transactionAmount.toFixed(2)}) is less than product price (GHS ${productPrice.toFixed(2)}). Please select a product that costs GHS ${transactionAmount.toFixed(2)} or less.`,
+          transactionAmount: transactionAmount,
+          productPrice: productPrice
+        });
+      }
+
+      // Transaction is valid
+      res.status(200).json({
+        success: true,
+        message: "Transaction verified successfully",
+        transactionAmount: transactionAmount,
+        productPrice: productPrice
+      });
+    } catch (error) {
+      console.error("Error verifying transaction:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error verifying transaction",
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = new SmsController();

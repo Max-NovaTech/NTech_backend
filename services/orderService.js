@@ -151,11 +151,11 @@ async function getAllOrders(limit = 100, offset = 0) {
     const transformed = {
       id: `SHOP-${shop.id}`, // Prefix to distinguish from regular orders
       createdAt: shop.orderTime,
-      status: "Completed", // Shop orders are auto-processed
+      status: shop.status || "Pending", // Use actual shop status from database (Pending, Processing, Completed)
       mobileNumber: shop.phoneNumber,
       user: {
         id: null,
-        name: shop.fullName || "Shop Customer",
+        name: "shop", // Use "shop" as username to identify shop orders in frontend
         email: null,
         phone: shop.phoneNumber,
       },
@@ -165,7 +165,7 @@ async function getAllOrders(limit = 100, offset = 0) {
           productId: null,
           quantity: 1,
           mobileNumber: shop.phoneNumber,
-          status: "Completed",
+          status: shop.status || "Pending", // Use actual shop status from database
           product: {
             id: null,
             name: shop.productName || "Shop Product",

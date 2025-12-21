@@ -10,7 +10,9 @@ router.get('/unprocessed', (req, res) => smsController.getUnprocessedSms(req, re
 
 router.put('/:id/mark-processed', smsController.markAsProcessed);
 
-
 router.get('/payment-received', smsController.getPaymentReceivedMessages);
+
+// Route to verify transaction amount for shop orders
+router.post('/verify/amount', (req, res) => smsController.verifyTransactionAmount(req, res));
 
 module.exports = router;
