@@ -22,6 +22,7 @@ const announcementRoutes = require('./routes/announcementRoutes');
 const pasteRoutes = require('./routes/pasteRoutes');
 const shopRoutes = require('./routes/shopRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const agentStorefrontRoutes = require('./routes/agentStorefrontRoutes');
 
 // Log initial memory usage
 memoryMonitor.log('Server Starting');
@@ -120,6 +121,7 @@ app.use('/api/announcement', announcementRoutes);
 app.use('/api', pasteRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/agent', agentStorefrontRoutes);
 
 
 // Memory health endpoint for monitoring

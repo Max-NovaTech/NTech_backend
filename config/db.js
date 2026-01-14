@@ -6,7 +6,6 @@ if (global.prisma) {
   prisma = global.prisma;
 } else {
   prisma = new PrismaClient({
-    // Reduce connection pool size to save RAM
     datasources: {
       db: {
         url: process.env.DATABASE_URL,

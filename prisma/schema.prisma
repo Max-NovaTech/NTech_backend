@@ -223,3 +223,63 @@ model Complaint {
   @@index([status])
   @@map("Complaint")
 }
+
+model AgentStorefront {
+  id              Int                      @id @default(autoincrement())
+  agentId         Int                      @unique
+  storeName       String                   @db.VarChar(255)
+  momoNumber      String                   @db.VarChar(20)
+  momoName        String                   @db.VarChar(255)
+  storeSlug       String                   @unique @db.VarChar(100)
+  isActive        Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  products        AgentStorefrontProduct[]
+  orders          AgentStoreOrder[]
+  
+  @@index([agentId])
+  @@index([storeSlug])
+  @@map("AgentStorefront")
+}
+
+model AgentStorefrontProduct {
+  id              Int             @id @default(autoincrement())
+  storefrontId    Int
+  productId       Int
+  customPrice     Float
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  storefront      AgentStorefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+  
+  @@unique([storefrontId, productId])
+  @@index([storefrontId])
+  @@index([productId])
+  @@map("AgentStorefrontProduct")
+}
+
+model AgentStoreOrder {
+  id                 Int             @id @default(autoincrement())
+  storefrontId       Int
+  customerName       String          @db.VarChar(255)
+  customerPhone      String          @db.VarChar(20)
+  productId          Int
+  productName        String          @db.VarChar(255)
+  productDescription String?         @db.VarChar(255)
+  customerPrice      Float
+  agentPrice         Float
+  transactionId      String          @db.VarChar(255)
+  status             String          @default("Pending")
+  isAddedToCart      Boolean         @default(false)
+  isPushedToAdmin    Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  storefront         AgentStorefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+  
+  @@index([storefrontId])
+  @@index([status])
+  @@index([transactionId])
+  @@index([isPushedToAdmin])
+  @@index([isAddedToCart])
+  @@map("AgentStoreOrder")
+}
