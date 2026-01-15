@@ -128,8 +128,10 @@ async function getAllOrders(limit = 100, offset = 0) {
     },
   });
 
-  // Fetch shop orders
+  // Fetch shop orders with limit to prevent memory overflow
   const shopOrders = await prisma.shop.findMany({
+    take: Math.min(limit, 500), // Limit shop orders too
+    skip: offset,
     orderBy: {
       createdAt: "desc",
     },
@@ -445,8 +447,9 @@ const getOrderStatus = async (options = {}) => {
     }
   }
 
-  // Fetch and include shop orders
+  // Fetch and include shop orders with limit
   const shopOrders = await prisma.shop.findMany({
+    take: limit,
     orderBy: {
       createdAt: "desc",
     },

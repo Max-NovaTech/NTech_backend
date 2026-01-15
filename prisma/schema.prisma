@@ -228,8 +228,8 @@ model AgentStorefront {
   id              Int                      @id @default(autoincrement())
   agentId         Int                      @unique
   storeName       String                   @db.VarChar(255)
-  momoNumber      String                   @db.VarChar(20)
-  momoName        String                   @db.VarChar(255)
+  momoNumber      String?                  @db.VarChar(20)
+  momoName        String?                  @db.VarChar(255)
   storeSlug       String                   @unique @db.VarChar(100)
   isActive        Boolean                  @default(true)
   createdAt       DateTime                 @default(now())
@@ -240,6 +240,24 @@ model AgentStorefront {
   @@index([agentId])
   @@index([storeSlug])
   @@map("AgentStorefront")
+}
+
+model AgentProfit {
+  id              Int             @id @default(autoincrement())
+  agentId         Int
+  orderId         Int
+  orderReference  String          @db.VarChar(255)
+  customerPrice   Float
+  adminPrice      Float
+  profit          Float
+  status          String          @default("Pending") // Pending, Deposited, Sent
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("AgentProfit")
 }
 
 model AgentStorefrontProduct {

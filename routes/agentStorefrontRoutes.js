@@ -22,4 +22,10 @@ router.post('/storefront/:agentId/mark-orders-submitted', agentStorefrontControl
 router.get('/store/:storeSlug', agentStorefrontController.getPublicStore);
 router.post('/store/:storeSlug/order', agentStorefrontController.createOrder);
 
+// Admin routes for agent profits
+router.get('/profits', agentStorefrontController.getAllAgentProfits);
+router.get('/profits/stats', agentStorefrontController.getAdminAgentProfitStats);
+router.post('/profits/:profitId/deposit', agentStorefrontController.depositAgentProfit);
+router.post('/profits/:profitId/send-cash', agentStorefrontController.sendCashAgentProfit);
+
 module.exports = router;

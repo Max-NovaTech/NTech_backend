@@ -139,17 +139,18 @@ server.listen(PORT, () => {
   // console.log(`Server running on port ${PORT}`);
   memoryMonitor.log('Server Started');
   
-  // Log memory usage every 10 minutes in production
+  // Log memory usage every 5 minutes in production
   setInterval(() => {
     memoryMonitor.log('Periodic Memory Check');
     
     // Force garbage collection if memory is high and GC is exposed
-    if (memoryMonitor.isMemoryHigh(400)) {
-      console.warn('[Memory Warning] High memory usage detected!');
+    const usage = memoryMonitor.getCurrentUsage();
+    if (usage.heapUsed > 350) { // 350MB threshold for 512MB limit
+      console.warn(`[Memory Warning] High memory usage detected! Heap: ${usage.heapUsed}MB`);
       if (global.gc) {
         global.gc();
-        // console.log('[Memory] Forced garbage collection');
+        console.log('[Memory] Forced garbage collection');
       }
     }
-  }, 600000); // Every 10 minutes
+  }, 300000); // Every 5 minutes
 });

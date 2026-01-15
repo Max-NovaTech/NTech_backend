@@ -1,4 +1,5 @@
 const agentStorefrontService = require('../services/agentStorefrontService');
+const smsService = require('../services/smsService');
 
 const getStorefront = async (req, res) => {
   try {
@@ -86,8 +87,8 @@ const getPublicStore = async (req, res) => {
 const createOrder = async (req, res) => {
   try {
     const { storeSlug } = req.params;
-    const order = await agentStorefrontService.createAgentStoreOrder(storeSlug, req.body);
-    res.json({ success: true, message: 'Order placed successfully', order });
+    const result = await agentStorefrontService.createAgentStoreOrder(storeSlug, req.body, smsService);
+    res.json({ success: true, message: 'Order placed successfully! It will be processed shortly.', order: result.agentOrder });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -184,6 +185,46 @@ const regenerateLink = async (req, res) => {
   }
 };
 
+// Admin endpoints for agent profits
+const getAllAgentProfits = async (req, res) => {
+  try {
+    const { agentId, status, startDate, endDate } = req.query;
+    const profits = await agentStorefrontService.getAllAgentProfits({ agentId, status, startDate, endDate });
+    res.json(profits);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getAdminAgentProfitStats = async (req, res) => {
+  try {
+    const stats = await agentStorefrontService.getAdminAgentProfitStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const depositAgentProfit = async (req, res) => {
+  try {
+    const { profitId } = req.params;
+    const result = await agentStorefrontService.depositAgentProfit(profitId);
+    res.json({ success: true, message: 'Profit deposited to agent wallet', profit: result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+const sendCashAgentProfit = async (req, res) => {
+  try {
+    const { profitId } = req.params;
+    const result = await agentStorefrontService.sendCashAgentProfit(profitId);
+    res.json({ success: true, message: 'Profit marked as sent', profit: result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getStorefront,
   createOrUpdateStorefront,
@@ -201,5 +242,9 @@ module.exports = {
   addMultipleProducts,
   getApprovedOrdersInCart,
   markOrdersAsSubmitted,
-  regenerateLink
+  regenerateLink,
+  getAllAgentProfits,
+  getAdminAgentProfitStats,
+  depositAgentProfit,
+  sendCashAgentProfit
 };
